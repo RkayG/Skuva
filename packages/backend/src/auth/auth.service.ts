@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException, BadRequestException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from '../users/users.service';
 import { LoginDto } from './dto/login.dto';
@@ -15,7 +15,6 @@ export class AuthService {
   async validateUser(loginDto: LoginDto) {
     const user = await this.usersService.findByEmail(loginDto.email);
     if (user && (await bcrypt.compare(loginDto.password, user.passwordHash))) {
-      // Don't return the password hash
       const { passwordHash, ...result } = user;
       return result;
     }
@@ -25,8 +24,6 @@ export class AuthService {
   async login(loginDto: LoginDto) {
     const user = await this.validateUser(loginDto);
     
-    // Default to the first organization for the JWT context
-    // Real-world apps might require the user to specify which org they are logging into
     const defaultMembership = user.memberships[0];
 
     const payload = { 
@@ -49,10 +46,25 @@ export class AuthService {
   }
 
   async register(registerDto: RegisterDto) {
-    const user = await this.usersService.createUserWithOrganization(registerDto);
+    let user;
+
+    if (registerDto.inviteToken) {
+      try {
+        const payload = this.jwtService.verify(registerDto.inviteToken);
+        if (payload.email !== registerDto.email) {
+          throw new BadRequestException('Email does not match invite');
+        }
+        user = await this.usersService.createUserWithInvite(registerDto, payload.organizationId);
+      } catch (e) {
+        throw new BadRequestException('Invalid or expired invite token');
+      }
+    } else {
+      user = await this.usersService.createUserWithOrganization(registerDto);
+    }
+
     const defaultMembership = user.memberships[0];
 
-    const payload = { 
+    const jwtPayload = { 
       sub: user.id, 
       email: user.email,
       organizationId: defaultMembership?.organizationId,
@@ -60,7 +72,7 @@ export class AuthService {
     };
 
     return {
-      access_token: this.jwtService.sign(payload),
+      access_token: this.jwtService.sign(jwtPayload),
       user: {
         id: user.id,
         email: user.email,
