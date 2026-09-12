@@ -68,4 +68,41 @@ export class UsersService {
       return user;
     });
   }
+
+  async createUserWithInvite(dto: RegisterDto, organizationId: string) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: dto.email },
+    });
+
+    if (existingUser) {
+      throw new ConflictException('User with this email already exists');
+    }
+
+    const salt = await bcrypt.genSalt(10);
+    const passwordHash = await bcrypt.hash(dto.password, salt);
+
+    return this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.create({
+        data: {
+          email: dto.email,
+          passwordHash,
+          firstName: dto.firstName,
+          lastName: dto.lastName,
+          memberships: {
+            create: {
+              organizationId,
+              role: 'MEMBER', // Users join as members from invites
+            },
+          },
+        },
+        include: {
+          memberships: {
+            include: { organization: true },
+          },
+        },
+      });
+
+      return user;
+    });
+  }
 }
