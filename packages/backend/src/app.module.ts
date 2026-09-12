@@ -7,15 +7,21 @@ import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { CloudinaryModule } from './cloudinary/cloudinary.module';
 import { EmailModule } from './email/email.module';
+import { OrganizationsModule } from './organizations/organizations.module.js';
+import { validate } from './config/env.validation';
 
 @Module({
   imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
+    ConfigModule.forRoot({ 
+      isGlobal: true,
+      validate,
+    }),
     PrismaModule,
     UsersModule,
     AuthModule,
     CloudinaryModule,
     EmailModule,
+    OrganizationsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
